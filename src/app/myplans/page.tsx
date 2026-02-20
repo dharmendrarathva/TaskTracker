@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 export default function MyPlansPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+const [title, setTitle] = useState("");
+const [days, setDays] = useState(30);
+const [creating, setCreating] = useState(false);
+
   const router = useRouter();
+
 
 
   async function safeJson(res: Response) {
@@ -18,6 +24,8 @@ export default function MyPlansPage() {
       return {};
     }
   }
+
+
 
 
   async function loadPlans() {
@@ -45,6 +53,61 @@ export default function MyPlansPage() {
     loadPlans();
   }, []);
 
+  async function createPlan() {
+  if (!title.trim()) return;
+
+  setCreating(true);
+
+  try {
+    const res = await fetch("/api/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        title,
+        totalDays: days,
+        startDate: new Date(),
+      }),
+    });
+
+    const data = await safeJson(res);
+
+    if (!res.ok || !data.success) {
+      alert(data.error || "Failed to create plan");
+      return;
+    }
+
+    setTitle("");
+    loadPlans();
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setCreating(false);
+  }
+}
+
+async function deletePlan(planId: string) {
+  if (!confirm("Delete this plan permanently?")) return;
+
+  try {
+    const res = await fetch(`/api/plan/${planId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    const data = await safeJson(res);
+
+    if (!res.ok || !data.success) {
+      alert(data.error || "Delete failed");
+      return;
+    }
+
+    loadPlans();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 
   if (loading) {
     return (
@@ -63,13 +126,49 @@ export default function MyPlansPage() {
 
         <div className="flex flex-wrap justify-between items-center gap-4">
           <h1 className="text-3xl font-bold tracking-tight">
-          My Study Plans
+         Plans
           </h1>
 
           <div className="text-sm text-white/60">
             {plans.length} plan{plans.length !== 1 ? "s" : ""}
           </div>
         </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+  <h2 className="text-lg font-semibold">Create New Plan</h2>
+
+  <div className="flex gap-3 flex-wrap">
+    <input
+      value={title}
+      onChange={(e) => setTitle(e.target.value)}
+      placeholder="Plan Title"
+      className="bg-black/40 border border-white/10 rounded px-3 py-2 text-sm"
+    />
+
+
+
+    <input
+      type="number"
+      value={days}
+      onChange={(e) => setDays(Number(e.target.value))}
+      min={1}
+      max={365}
+      className="bg-black/40 border border-white/10 rounded px-3 py-2 text-sm w-24"
+    />
+
+    <button
+      onClick={createPlan}
+      disabled={creating}
+      className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm"
+    >
+      {creating ? "Creating..." : "Create"}
+    </button>
+  </div>
+
+  <p className="text-xs text-white/40">
+    Maximum 5 active plans allowed.
+  </p>
+</div>
 
         {plans.length === 0 && (
           <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
@@ -82,6 +181,8 @@ export default function MyPlansPage() {
             </p>
           </div>
         )}
+
+    
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => {
@@ -154,6 +255,16 @@ onClick={() => router.push(`/plan/${plan._id}`)}
                 <div className="mt-4 opacity-0 group-hover:opacity-100 transition text-xs text-emerald-400">
                   Open dashboard →
                 </div>
+
+                <button
+  onClick={(e) => {
+    e.stopPropagation();
+    deletePlan(plan._id);
+  }}
+  className="mt-3 text-xs text-red-400 hover:text-red-300"
+>
+  Delete Plan
+</button>
               </div>
             );
           })}

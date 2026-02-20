@@ -5,6 +5,8 @@ import { connectDB } from "@/config/db";
 import Plan from "@/models/Plan";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import Progress from "@/models/Progress";
+import Task from "@/models/Task";
 
 export async function GET(
   req: Request,
@@ -26,5 +28,49 @@ export async function GET(
     return NextResponse.json({ success: true, data: plan });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ planId: string }> }
+) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+
+    const { planId } = await context.params;
+
+    const plan = await Plan.findById(planId);
+
+    if (!plan || plan.userId.toString() !== session.user.id)
+      return NextResponse.json(
+        { success: false, error: "Forbidden" },
+        { status: 403 }
+      );
+
+    // Delete related data
+    await Promise.all([
+      Task.deleteMany({ planId }),
+      Progress.deleteMany({ planId }),
+      Plan.findByIdAndDelete(planId),
+    ]);
+    
+    return NextResponse.json({
+      success: true,
+      message: "Plan deleted successfully",
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 400 }
+    );
   }
 }

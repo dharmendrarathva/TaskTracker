@@ -1,59 +1,6 @@
 
 
 
-// "use client";
-
-// import { useEffect, useState } from "react";
-// import { useParams, useRouter } from "next/navigation";
-
-// export default function PlanDashboard() {
-//   const { planId } = useParams();
-//   const router = useRouter();
-//   const [plan, setPlan] = useState<any>(null);
-
-//   async function loadPlan() {
-//     const res = await fetch(`/api/plan/${planId}`, {
-//       credentials: "include",
-//     });
-//     const data = await res.json();
-
-//     if (res.ok && data.success) {
-//       setPlan(data.data);
-//     }
-//   }
-
-//   useEffect(() => {
-//     if (planId) loadPlan();
-//   }, [planId]);
-
-//   if (!plan) return <div className="p-6">Loading...</div>;
-
-//   return (
-//     <div className="min-h-screen bg-zinc-100 p-6">
-//       <h1 className="text-2xl font-bold mb-4">{plan.title}</h1>
-
-//       <div className="flex gap-4">
-//         <button
-//           onClick={() => router.push(`/plan/${planId}/tasks`)}
-//           className="bg-black text-white px-4 py-2 rounded"
-//         >
-//           Manage Tasks
-//         </button>
-
-//         <button
-//           onClick={() => router.push(`/plan/${planId}/progress`)}
-//           className="bg-green-600 text-white px-4 py-2 rounded"
-//         >
-//           View Progress
-//         </button>
-//       </div>
-//     </div>
-//   );
-// }
-
-
-
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";

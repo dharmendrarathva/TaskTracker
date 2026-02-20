@@ -28,10 +28,38 @@ export async function POST(req: Request) {
 
     const session = await getServerSession(authOptions);
     if (!session?.user?.id)
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
 
     const body = await req.json();
     const { title, totalDays, startDate } = body;
+
+    if (!title || !totalDays || !startDate) {
+      return NextResponse.json(
+        { success: false, error: "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    /* =========================
+       🔒 MAX 5 PLAN LIMIT
+    ========================== */
+
+    const planCount = await Plan.countDocuments({
+      userId: session.user.id,
+    });
+
+    if (planCount >= 5) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Maximum 5 plans allowed. Delete an old plan first.",
+        },
+        { status: 400 }
+      );
+    }
 
     const start = new Date(startDate);
     const end = new Date(start);
@@ -45,8 +73,14 @@ export async function POST(req: Request) {
       endDate: end,
     });
 
-    return NextResponse.json({ success: true, data: plan }, { status: 201 });
+    return NextResponse.json(
+      { success: true, data: plan },
+      { status: 201 }
+    );
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 400 }
+    );
   }
 }
