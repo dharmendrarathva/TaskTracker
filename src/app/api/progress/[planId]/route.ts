@@ -1,3 +1,5 @@
+
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
 import Progress from "@/models/Progress";
@@ -20,24 +22,31 @@ export async function GET(
       );
     }
 
-    // ✅ Next 16 FIX
     const { planId } = await context.params;
+const plan = await Plan.findById(planId).lean();
 
-    const plan = await Plan.findById(planId);
-    if (!plan || plan.userId.toString() !== session.user.id) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden" },
-        { status: 403 }
-      );
-    }
+if (!plan || plan.userId.toString() !== session.user.id) {
+  return NextResponse.json(
+    { success: false, error: "Forbidden" },
+    { status: 403 }
+  );
+}
 
-    const progress = await Progress.find({ planId }).lean();
+const progress = await Progress.find({ planId }).lean();
 
-    return NextResponse.json(
-      { success: true, data: progress },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      success: true,
+      data: progress,
+      meta: {
+        totalDays: plan.totalDays,
+        startDate: plan.startDate,
+        endDate: plan.endDate,
+        title: plan.title,
+      },
+    });
   } catch (error: any) {
+    console.error("Progress GET error:", error);
+
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 400 }

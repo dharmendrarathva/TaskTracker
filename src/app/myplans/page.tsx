@@ -1,362 +1,162 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function Home() {
-  const [plan, setPlan] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [progressMap, setProgressMap] = useState<Record<string, boolean>>({});
+export default function MyPlansPage() {
+  const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const [title, setTitle] = useState("");
-  const [days, setDays] = useState(30);
-  const [startDate, setStartDate] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
 
-  /* ================= LOAD PLAN ================= */
-
-  async function loadPlan() {
+  async function safeJson(res: Response) {
+    const text = await res.text();
     try {
-      const res = await fetch("/api/plan", { credentials: "include" });
+      return text ? JSON.parse(text) : {};
+    } catch {
+      console.error("Invalid JSON:", text);
+      return {};
+    }
+  }
 
-      const data = await res.json();
 
-      if (Array.isArray(data) && data.length > 0) {
-        setPlan(data[0]);
+  async function loadPlans() {
+    try {
+      const res = await fetch("/api/plan", {
+        credentials: "include",
+      });
+
+      const data = await safeJson(res);
+
+      if (res.ok && data.success) {
+        setPlans(data.data || []);
       } else {
-        setPlan(null);
+        setPlans([]);
       }
     } catch (err) {
-      console.error("Plan load failed:", err);
-      setPlan(null);
+      console.error("Failed to load plans:", err);
+      setPlans([]);
     } finally {
       setLoading(false);
     }
   }
 
-  /* ================= LOAD TASKS ================= */
-async function loadTasks(planId: string) {
-  try {
-    const res = await fetch(`/api/task?planId=${planId}`, {
-      credentials: "include",
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      console.error("Task API error:", data.error);
-      setTasks([]);
-      return;
-    }
-
-    setTasks(data.data || []);
-  } catch (err) {
-    console.error("Task load failed:", err);
-    setTasks([]);
-  }
-}
-
-  /* ================= LOAD PROGRESS ================= */
-
-async function loadProgress(planId: string) {
-  try {
-    const res = await fetch(`/api/progress/${planId}`, {
-      credentials: "include",
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.success) {
-      setProgressMap({});
-      return;
-    }
-
-    const map: Record<string, boolean> = {};
-
-    data.data.forEach((p: any) => {
-      map[`${p.taskId}-${p.dayNumber}`] = p.completed;
-    });
-
-    setProgressMap(map);
-  } catch (err) {
-    setProgressMap({});
-  }
-}
-  /* ================= EFFECTS ================= */
-
   useEffect(() => {
-    loadPlan();
+    loadPlans();
   }, []);
 
-  useEffect(() => {
-    if (plan?._id) {
-      loadTasks(plan._id);
-      loadProgress(plan._id);
-    }
-  }, [plan]);
-
-  /* ================= CREATE PLAN ================= */
-
-  async function createPlan() {
-    try {
-      const res = await fetch("/api/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          totalDays: days,
-          startDate,
-        }),
-      });
-
-      const data = await res.json();
-      setPlan(data);
-    } catch (err) {
-      console.error("Create plan failed:", err);
-    }
-  }
-
-  /* ================= ADD TASK ================= */
-
-  async function addTask() {
-    if (!plan?._id) return;
-
-    try {
-      await fetch("/api/task", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          planId: plan._id,
-          title: taskTitle,
-        }),
-      });
-
-      setTaskTitle("");
-      loadTasks(plan._id);
-    } catch (err) {
-      console.error("Add task failed:", err);
-    }
-  }
-
-  /* ================= TOGGLE PROGRESS ================= */
-
-async function toggle(taskId: string, day: number) {
-  if (!plan?._id) return;
-
-  const key = `${taskId}-${day}`;
-  const newValue = !progressMap[key];
-
-  try {
-    const res = await fetch("/api/progress", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        planId: plan._id,
-        taskId,
-        dayNumber: day,
-        completed: newValue,
-      }),
-    });
-
-    // 🔥 SAFETY CHECK
-    const text = await res.text();
-
-    let data: any = {};
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch {
-      console.error("Invalid JSON response:", text);
-      alert("Server error. Check backend.");
-      return;
-    }
-
-    if (!res.ok || !data.success) {
-      console.error("Save failed:", data.error);
-      alert(data.error || "Save failed");
-      return;
-    }
-
-    setProgressMap((prev) => ({
-      ...prev,
-      [key]: newValue,
-    }));
-  } catch (err) {
-    console.error("Toggle error:", err);
-  }
-}
-  /* ================= ACTIVE DAY CALC ================= */
-
-  let activeDay = 0;
-
-  if (plan?.startDate) {
-    const today = new Date();
-    const start = new Date(plan.startDate);
-
-    start.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-
-    const diff =
-      Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
-
-    activeDay = diff;
-  }
-
-  /* ================= LOADING ================= */
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
-      </div>
-    );
-  }
-
-  /* ================= NO PLAN ================= */
-
-  if (!plan) {
-    return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-xl shadow-lg w-[420px] space-y-4">
-          <h1 className="text-xl font-bold text-center">
-            Create Study Plan
-          </h1>
-
-          <input
-            placeholder="Plan Title"
-            className="w-full border p-2 rounded"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-
-          <input
-            type="number"
-            placeholder="Total Days"
-            className="w-full border p-2 rounded"
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-          />
-
-          <input
-            type="date"
-            className="w-full border p-2 rounded"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-
-          <button
-            onClick={createPlan}
-            className="w-full bg-black text-white py-2 rounded"
-          >
-            Create Plan
-          </button>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-900 to-black">
+        <div className="animate-pulse text-white/70 text-lg">
+          Loading your plans...
         </div>
       </div>
     );
   }
 
-  /* ================= PROGRESS METRICS ================= */
-
-  const totalCells = plan.totalDays * tasks.length;
-  const completedCount = Object.values(progressMap).filter(Boolean).length;
-  const completionPercent =
-    totalCells === 0
-      ? 0
-      : Math.round((completedCount / totalCells) * 100);
-
-  /* ================= MATRIX UI ================= */
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6 text-black">
-      <div className="bg-white p-6 rounded-xl shadow space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-black to-zinc-900 p-6 text-white">
+      <div className="max-w-6xl mx-auto space-y-8">
 
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">{plan.title}</h1>
-          <div className="text-sm bg-green-100 px-3 py-1 rounded">
-            Overall Progress: {completionPercent}%
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <h1 className="text-3xl font-bold tracking-tight">
+          My Study Plans
+          </h1>
+
+          <div className="text-sm text-white/60">
+            {plans.length} plan{plans.length !== 1 ? "s" : ""}
           </div>
         </div>
 
-        {/* ADD TASK */}
-        <div className="flex gap-2">
-          <input
-            placeholder="New Task"
-            className="border p-2 rounded w-full"
-            value={taskTitle}
-            onChange={(e) => setTaskTitle(e.target.value)}
-          />
-          <button
-            onClick={addTask}
-            className="bg-black text-black px-4 rounded"
-          >
-            Add
-          </button>
-        </div>
+        {plans.length === 0 && (
+          <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
+            <div className="text-4xl mb-3">🚀</div>
+            <p className="text-white/70 mb-2 font-medium">
+              No study plans yet
+            </p>
+            <p className="text-white/40 text-sm">
+              Create your first plan to start tracking progress.
+            </p>
+          </div>
+        )}
 
-        {/* MATRIX */}
-        <div className="overflow-x-auto">
-          <table className="min-w-max border-collapse w-full text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 bg-white border p-2 z-10">
-                  Day
-                </th>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {plans.map((plan) => {
+            const startDate = new Date(plan.startDate);
 
-                {Array.isArray(tasks) &&
-                  tasks.map((t) => (
-                    <th key={t._id} className="border p-2">
-                      {t.title}
-                    </th>
-                  ))}
-              </tr>
-            </thead>
+            let previewPercent = 0;
+            if (plan.startDate) {
+              const today = new Date();
+              const diff =
+                Math.floor(
+                  (today.getTime() - startDate.getTime()) / 86400000
+                ) + 1;
 
-            <tbody>
-              {Array.from({ length: plan.totalDays }).map((_, i) => {
-                const day = i + 1;
-                const isActive = day === activeDay;
-                const locked = day !== activeDay;
+              previewPercent = Math.min(
+                100,
+                Math.round((diff / plan.totalDays) * 100)
+              );
+            }
 
-                return (
-                  <tr
-                    key={day}
-                    className={isActive ? "bg-green-50" : ""}
-                  >
-                    <td className="sticky left-0 bg-white border p-2 font-medium">
-                      Day {day}
-                    </td>
+            return (
+             <div
+  key={plan._id}
+onClick={() => router.push(`/plan/${plan._id}`)}
+  className="
+    group cursor-pointer
+    backdrop-blur-xl bg-white/5
+    border border-white/10
+    rounded-2xl p-5
+    hover:bg-white/10
+    hover:scale-[1.02]
+    transition-all duration-300
+    shadow-lg hover:shadow-2xl
+  "
+>
 
-                    {Array.isArray(tasks) &&
-                      tasks.map((t) => {
-                        const key = `${t._id}-${day}`;
-                        const checked = progressMap[key] || false;
+                <div className="flex justify-between items-start mb-4">
+                  <h2 className="text-lg font-semibold leading-tight">
+                    {plan.title}
+                  </h2>
 
-                        return (
-                          <td
-                            key={t._id}
-                            className="border text-center p-2"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={locked}
-                              onChange={() => toggle(t._id, day)}
-                              className={`w-4 h-4 ${
-                                locked
-                                  ? "opacity-40 cursor-not-allowed"
-                                  : "cursor-pointer"
-                              }`}
-                            />
-                          </td>
-                        );
-                      })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  <div className="relative w-10 h-10">
+                    <svg viewBox="0 0 36 36" className="w-10 h-10">
+                      <path
+                        d="M18 2a16 16 0 1 1 0 32a16 16 0 1 1 0-32"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.15)"
+                        strokeWidth="3"
+                      />
+                      <path
+                        d="M18 2a16 16 0 1 1 0 32a16 16 0 1 1 0-32"
+                        fill="none"
+                        stroke="rgb(16 185 129)"
+                        strokeWidth="3"
+                        strokeDasharray={`${previewPercent}, 100`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-sm">
+                  <p className="text-white/70">
+                    ⏳ {plan.totalDays} days
+                  </p>
+                  <p className="text-white/40 text-xs">
+                    📅 {startDate.toDateString()}
+                  </p>
+                </div>
+
+                <div className="mt-4 opacity-0 group-hover:opacity-100 transition text-xs text-emerald-400">
+                  Open dashboard →
+                </div>
+              </div>
+            );
+          })}
         </div>
 
       </div>

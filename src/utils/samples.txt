@@ -1,3 +1,498 @@
+import mongoose, { Schema, Document, Model } from "mongoose";
+
+export interface ITask extends Document {
+  planId: mongoose.Types.ObjectId;
+  title: string;
+  estimatedMinutes?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const TaskSchema = new Schema<ITask>(
+  {
+    planId: {
+      type: Schema.Types.ObjectId,
+      ref: "Plan",
+      required: true,
+      index: true,
+    },
+    title: { type: String, required: true, trim: true },
+    estimatedMinutes: Number,
+  },
+  { timestamps: true }
+);
+
+TaskSchema.index({ planId: 1 });
+
+export default (mongoose.models.Task as Model<ITask>) ||
+  mongoose.model<ITask>("Task", TaskSchema);
+
+  import mongoose, { Schema, Document, Model } from "mongoose";
+
+export interface IProgress extends Document {
+  planId: mongoose.Types.ObjectId;
+  taskId: mongoose.Types.ObjectId;
+  dayNumber: number;
+  date: Date;
+  completed: boolean;
+  actualMinutesSpent?: number;
+}
+
+const ProgressSchema = new Schema<IProgress>(
+  {
+    planId: {
+      type: Schema.Types.ObjectId,
+      ref: "Plan",
+      required: true,
+      index: true,
+    },
+    taskId: {
+      type: Schema.Types.ObjectId,
+      ref: "Task",
+      required: true,
+      index: true,
+    },
+    dayNumber: {
+      type: Number,
+      required: true,
+    },
+    date: {
+      type: Date,
+      required: true,
+    },
+    completed: {
+      type: Boolean,
+      default: false,
+    },
+    actualMinutesSpent: Number,
+  },
+  { timestamps: true }
+);
+
+// ✅ ONLY THIS UNIQUE INDEX
+ProgressSchema.index(
+  { planId: 1, taskId: 1, dayNumber: 1 },
+  { unique: true }
+);
+
+ProgressSchema.index({ planId: 1, dayNumber: 1 });
+
+export default (mongoose.models.Progress as Model<IProgress>) ||
+  mongoose.model<IProgress>("Progress", ProgressSchema);
+
+
+  import mongoose, { Schema, Document, Model } from "mongoose";
+
+export interface IPlan extends Document {
+  userId: mongoose.Types.ObjectId;
+  title: string;
+  totalDays: number;
+  startDate: Date;
+  endDate: Date;
+  dailyTimeLimitMinutes?: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const PlanSchema = new Schema<IPlan>(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    title: { type: String, required: true, trim: true },
+
+    totalDays: { type: Number, required: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+
+    dailyTimeLimitMinutes: Number,
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+PlanSchema.index({ userId: 1 });
+PlanSchema.index({ startDate: 1 });
+PlanSchema.index({ endDate: 1 });
+
+export default (mongoose.models.Plan as Model<IPlan>) ||
+  mongoose.model<IPlan>("Plan", PlanSchema);
+
+// src/lib/date.ts
+
+export function calculateActiveDay(
+  startDate: Date,
+  totalDays: number
+) {
+  const now = new Date();
+
+  // Normalize both to local midnight
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  const diffMs = today.getTime() - start.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  const activeDay = diffDays + 1;
+
+  if (activeDay < 1) return 0;
+  if (activeDay > totalDays) return totalDays + 1;
+
+  return activeDay;
+}
+
+
+
+// src/controllers/task.controller.ts
+
+import Task from "@/models/Task";
+import Plan from "@/models/Plan";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function createTask(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const body = await req.json();
+  const { planId, title, estimatedMinutes } = body;
+
+  if (!planId || !title) {
+    throw new Error("Missing required fields");
+  }
+
+  const plan = await Plan.findById(planId);
+  if (!plan) throw new Error("Plan not found");
+
+  if (plan.userId.toString() !== session.user.id) {
+    throw new Error("Forbidden");
+  }
+
+  const task = await Task.create({
+    planId,
+    title,
+    estimatedMinutes,
+  });
+
+  return task;
+}
+
+export async function getTasksByPlan(planId: string) {
+  if (!planId) throw new Error("planId required");
+
+  const tasks = await Task.find({ planId }).lean();
+  return tasks;
+}
+
+
+// src/controllers/progress.controller.ts
+
+import Progress from "@/models/Progress";
+import Plan from "@/models/Plan";
+import { calculateActiveDay } from "@/lib/date";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function toggleProgress(req: Request) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const body = await req.json();
+  const { planId, taskId, dayNumber, completed } = body;
+
+  if (!planId || !taskId || !dayNumber) {
+    throw new Error("Invalid request data");
+  }
+
+  const plan = await Plan.findById(planId);
+
+  if (!plan) {
+    throw new Error("Plan not found");
+  }
+
+  if (plan.userId.toString() !== session.user.id) {
+    throw new Error("Forbidden");
+  }
+
+  const activeDay = calculateActiveDay(
+    plan.startDate,
+    plan.totalDays
+  );
+
+  if (activeDay <= 0 || activeDay > plan.totalDays) {
+    throw new Error("Plan not active");
+  }
+
+  if (dayNumber !== activeDay) {
+    throw new Error("Day locked");
+  }
+
+  const progress = await Progress.findOneAndUpdate(
+    {
+      planId,
+      taskId,
+      dayNumber,
+    },
+    {
+      $set: {
+        completed: !!completed,
+        date: new Date(),
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+    }
+  );
+
+  return progress;
+}
+
+import Plan from "@/models/Plan";
+import { calculateActiveDay } from "@/lib/date";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function createPlan(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const body = await req.json();
+  const { title, totalDays, startDate } = body;
+
+  if (!title || !totalDays || totalDays < 1 || totalDays > 365) {
+    throw new Error("Invalid input");
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(start);
+  end.setDate(start.getDate() + totalDays - 1);
+
+  const plan = await Plan.create({
+    userId: session.user.id,
+    title,
+    totalDays,
+    startDate: start,
+    endDate: end,
+  });
+
+  return plan;
+}
+
+export async function getPlans(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const plans = await Plan.find({ userId: session.user.id }).lean();
+  return plans;
+}
+
+// src/app/api/plan/[planId]/route.ts
+
+import { NextResponse } from "next/server";
+import { connectDB } from "@/config/db";
+import Plan from "@/models/Plan";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ planId: string }> }
+) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+
+    const { planId } = await context.params;
+
+    const plan = await Plan.findById(planId);
+    if (!plan || plan.userId.toString() !== session.user.id)
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+    return NextResponse.json({ success: true, data: plan });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+// src/app/api/plan/route.ts
+
+import { NextResponse } from "next/server";
+import { connectDB } from "@/config/db";
+import Plan from "@/models/Plan";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function GET() {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+
+    const plans = await Plan.find({ userId: session.user.id }).lean();
+
+    return NextResponse.json({ success: true, data: plans });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { title, totalDays, startDate } = body;
+
+    const start = new Date(startDate);
+    const end = new Date(start);
+    end.setDate(start.getDate() + totalDays - 1);
+
+    const plan = await Plan.create({
+      userId: session.user.id,
+      title,
+      totalDays,
+      startDate: start,
+      endDate: end,
+    });
+
+    return NextResponse.json({ success: true, data: plan }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+
+
+
+import { NextResponse } from "next/server";
+import { connectDB } from "@/config/db";
+import Progress from "@/models/Progress";
+import Plan from "@/models/Plan";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ planId: string }> }
+) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { planId } = await context.params;
+
+    const [plan, progress] = await Promise.all([
+      Plan.findById(planId).lean(),
+      Progress.find({ planId }).lean(),
+    ]);
+
+    if (!plan || plan.userId.toString() !== session.user.id) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: progress,
+      meta: {
+        totalDays: plan.totalDays,
+        startDate: plan.startDate,
+        endDate: plan.endDate,
+        title: plan.title,
+      },
+    });
+  } catch (error: any) {
+    console.error("Progress GET error:", error);
+
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 400 }
+    );
+  }
+}
+
+// src/app/api/progress/route.ts
+
+import { NextResponse } from "next/server";
+import { connectDB } from "@/config/db";
+import { toggleProgress } from "@/controllers/progress.controller";
+
+export async function POST(req: Request) {
+  try {
+    await connectDB();
+
+    const result = await toggleProgress(req);
+
+    return NextResponse.json({ success: true, data: result });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+// src/app/api/task/route.ts
+
+import { NextResponse } from "next/server";
+import { connectDB } from "@/config/db";
+import Task from "@/models/Task";
+import Plan from "@/models/Plan";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function POST(req: Request) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id)
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+
+    const { planId, title } = await req.json();
+
+    const plan = await Plan.findById(planId);
+    if (!plan || plan.userId.toString() !== session.user.id)
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+    const task = await Task.create({ planId, title });
+
+    return NextResponse.json({ success: true, data: task }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+
 
 
 
@@ -643,3 +1138,171 @@ const taskProgress = useMemo(() => {
 }
 
 
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function MyPlansPage() {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+
+  async function safeJson(res: Response) {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      console.error("Invalid JSON:", text);
+      return {};
+    }
+  }
+
+
+  async function loadPlans() {
+    try {
+      const res = await fetch("/api/plan", {
+        credentials: "include",
+      });
+
+      const data = await safeJson(res);
+
+      if (res.ok && data.success) {
+        setPlans(data.data || []);
+      } else {
+        setPlans([]);
+      }
+    } catch (err) {
+      console.error("Failed to load plans:", err);
+      setPlans([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadPlans();
+  }, []);
+
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-900 to-black">
+        <div className="animate-pulse text-white/70 text-lg">
+          Loading your plans...
+        </div>
+      </div>
+    );
+  }
+
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-black to-zinc-900 p-6 text-white">
+      <div className="max-w-6xl mx-auto space-y-8">
+
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <h1 className="text-3xl font-bold tracking-tight">
+          My Study Plans
+          </h1>
+
+          <div className="text-sm text-white/60">
+            {plans.length} plan{plans.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+
+        {plans.length === 0 && (
+          <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
+            <div className="text-4xl mb-3">🚀</div>
+            <p className="text-white/70 mb-2 font-medium">
+              No study plans yet
+            </p>
+            <p className="text-white/40 text-sm">
+              Create your first plan to start tracking progress.
+            </p>
+          </div>
+        )}
+
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {plans.map((plan) => {
+            const startDate = new Date(plan.startDate);
+
+            let previewPercent = 0;
+            if (plan.startDate) {
+              const today = new Date();
+              const diff =
+                Math.floor(
+                  (today.getTime() - startDate.getTime()) / 86400000
+                ) + 1;
+
+              previewPercent = Math.min(
+                100,
+                Math.round((diff / plan.totalDays) * 100)
+              );
+            }
+
+            return (
+             <div
+  key={plan._id}
+onClick={() => router.push(`/plan/${plan._id}`)}
+  className="
+    group cursor-pointer
+    backdrop-blur-xl bg-white/5
+    border border-white/10
+    rounded-2xl p-5
+    hover:bg-white/10
+    hover:scale-[1.02]
+    transition-all duration-300
+    shadow-lg hover:shadow-2xl
+  "
+>
+
+                <div className="flex justify-between items-start mb-4">
+                  <h2 className="text-lg font-semibold leading-tight">
+                    {plan.title}
+                  </h2>
+
+                  <div className="relative w-10 h-10">
+                    <svg viewBox="0 0 36 36" className="w-10 h-10">
+                      <path
+                        d="M18 2a16 16 0 1 1 0 32a16 16 0 1 1 0-32"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.15)"
+                        strokeWidth="3"
+                      />
+                      <path
+                        d="M18 2a16 16 0 1 1 0 32a16 16 0 1 1 0-32"
+                        fill="none"
+                        stroke="rgb(16 185 129)"
+                        strokeWidth="3"
+                        strokeDasharray={`${previewPercent}, 100`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-sm">
+                  <p className="text-white/70">
+                    ⏳ {plan.totalDays} days
+                  </p>
+                  <p className="text-white/40 text-xs">
+                    📅 {startDate.toDateString()}
+                  </p>
+                </div>
+
+                <div className="mt-4 opacity-0 group-hover:opacity-100 transition text-xs text-emerald-400">
+                  Open dashboard →
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+
+check all files work well but if anything is unsuse or multuple time use or its is safe production grade check also ensure only user can manage their plans 

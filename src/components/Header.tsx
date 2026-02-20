@@ -38,7 +38,7 @@ const Header = () => {
           {/* Protected Links */}
           {isAuthenticated && (
             <>
-              <Link href="/taskboard">Dashboard</Link>
+              <Link href="/myplans">Dashboard</Link>
               <Link href="/analysis">Analysis</Link>
               <Link href="/settings">Settings</Link>
             </>
