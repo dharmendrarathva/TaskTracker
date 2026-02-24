@@ -1,6 +1,24 @@
+"use client"
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+
 
 export default function CTASection() {
+
+
+  const router = useRouter();
+
+const handleClick = () => {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+
+  setTimeout(() => {
+    router.push("/");
+  }, 300); // delay for smooth effect
+};
   return (
     <section className="relative w-full py-28 bg-neutral-900 overflow-hidden">
       
@@ -21,19 +39,19 @@ export default function CTASection() {
         </p>
 
         {/* CTA Button */}
-        <Link
-          href="/dashboard"
-          className="group inline-flex items-center justify-center mt-12
-                     px-12 py-4 rounded-2xl
-                     bg-white text-black font-semibold text-lg
-                     transition-all duration-300
-                     hover:scale-105 hover:shadow-2xl"
-        >
-          Start Tracking Now
-          <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">
-            →
-          </span>
-        </Link>
+       <button
+  onClick={handleClick}
+  className="group inline-flex items-center justify-center mt-12
+             px-12 py-4 rounded-2xl
+             bg-white text-black font-semibold text-lg
+             transition-all duration-300
+             hover:scale-105 hover:shadow-2xl"
+>
+  Start Tracking Now
+  <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">
+    →
+  </span>
+</button>
       </div>
     </section>
   );
