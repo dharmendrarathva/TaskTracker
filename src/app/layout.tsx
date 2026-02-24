@@ -8,6 +8,8 @@ import { authOptions } from "@/lib/auth";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { ErrorProvider } from "@/providers/ErrorProvider";
+import { ToastProvider } from "@/providers/ToastProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,15 +34,25 @@ export default async function RootLayout({
   const session = await getServerSession(authOptions);
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
       >
-        <Providers session={session}>
-          <Header />
-          <main className="min-h-screen pt-18">{children}</main>
-          <Footer />
-        </Providers>
+        <ErrorProvider>
+          <ToastProvider>
+
+            <Providers session={session}>
+              <Header />
+
+              <main className="min-h-screen pt-18">
+                {children}
+              </main>
+
+              <Footer />
+            </Providers>
+          </ToastProvider>
+
+        </ErrorProvider>
       </body>
     </html>
   );

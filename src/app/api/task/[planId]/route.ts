@@ -20,7 +20,7 @@ export async function GET(
       );
     }
 
-    const { planId } = await context.params; // ✅ FIX
+    const { planId } = await context.params;
 
     const plan = await Plan.findById(planId).lean();
 
@@ -37,6 +37,7 @@ export async function GET(
       success: true,
       data: tasks,
     });
+
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },

@@ -2,63 +2,67 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function MyPlansPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-const [title, setTitle] = useState("");
-const [days, setDays] = useState(30);
-const [creating, setCreating] = useState(false);
+  const [title, setTitle] = useState("");
+  const [days, setDays] = useState(30);
+  const [tasks, setTasks] = useState<string[]>([""]);
+  const [creating, setCreating] = useState(false);
+
+  // ✅ Confirm dialog state
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   const router = useRouter();
 
-
-
   async function safeJson(res: Response) {
-    const text = await res.text();
     try {
-      return text ? JSON.parse(text) : {};
+      return await res.json();
     } catch {
-      console.error("Invalid JSON:", text);
       return {};
     }
   }
 
-
-
-
   async function loadPlans() {
-    try {
-      const res = await fetch("/api/plan", {
-        credentials: "include",
-      });
-
-      const data = await safeJson(res);
-
-      if (res.ok && data.success) {
-        setPlans(data.data || []);
-      } else {
-        setPlans([]);
-      }
-    } catch (err) {
-      console.error("Failed to load plans:", err);
-      setPlans([]);
-    } finally {
-      setLoading(false);
-    }
+    const res = await fetch("/api/plan", { credentials: "include" });
+    const data = await safeJson(res);
+    setPlans(res.ok && data.success ? data.data : []);
+    setLoading(false);
   }
 
   useEffect(() => {
     loadPlans();
   }, []);
 
+  function updateTask(index: number, value: string) {
+    const copy = [...tasks];
+    copy[index] = value;
+    setTasks(copy);
+  }
+
+  function addTaskField() {
+    setTasks([...tasks, ""]);
+  }
+
   async function createPlan() {
-  if (!title.trim()) return;
+    const filtered = tasks.filter((t) => t.trim() !== "");
 
-  setCreating(true);
+    if (!title.trim() || filtered.length === 0) {
+      alert("Add title and at least one task");
+      return;
+    }
 
-  try {
+    if (plans.length >= 5) {
+      alert("Maximum 5 plans allowed. Delete one first.");
+      return;
+    }
+
+    setCreating(true);
+
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -67,30 +71,28 @@ const [creating, setCreating] = useState(false);
         title,
         totalDays: days,
         startDate: new Date(),
+        tasks: filtered,
       }),
     });
 
     const data = await safeJson(res);
 
     if (!res.ok || !data.success) {
-      alert(data.error || "Failed to create plan");
-      return;
+      alert(data.error || "Failed");
+    } else {
+      setTitle("");
+      setTasks([""]);
+      loadPlans();
     }
 
-    setTitle("");
-    loadPlans();
-  } catch (err) {
-    console.error(err);
-  } finally {
     setCreating(false);
   }
-}
 
-async function deletePlan(planId: string) {
-  if (!confirm("Delete this plan permanently?")) return;
+  // 🔥 Actual delete function
+  async function confirmDeletePlan() {
+    if (!selectedPlanId) return;
 
-  try {
-    const res = await fetch(`/api/plan/${planId}`, {
+    const res = await fetch(`/api/plan/${selectedPlanId}`, {
       method: "DELETE",
       credentials: "include",
     });
@@ -99,176 +101,157 @@ async function deletePlan(planId: string) {
 
     if (!res.ok || !data.success) {
       alert(data.error || "Delete failed");
-      return;
+    } else {
+      loadPlans();
     }
 
-    loadPlans();
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-900 to-black">
-        <div className="animate-pulse text-white/70 text-lg">
-          Loading your plans...
-        </div>
-      </div>
-    );
+    setIsConfirmOpen(false);
+    setSelectedPlanId(null);
   }
 
+  if (loading) return <div className="p-6 text-white">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-black to-zinc-900 p-6 text-white">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-5xl mx-auto space-y-10">
 
-        <div className="flex flex-wrap justify-between items-center gap-4">
-          <h1 className="text-3xl font-bold tracking-tight">
-         Plans
-          </h1>
+        <h1 className="text-3xl font-bold">My Plans</h1>
 
-          <div className="text-sm text-white/60">
-            {plans.length} plan{plans.length !== 1 ? "s" : ""}
-          </div>
-        </div>
+    {/* CREATE PLAN */}
+<div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-8 backdrop-blur-md">
 
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
-  <h2 className="text-lg font-semibold">Create New Plan</h2>
+  <div>
+    <h2 className="text-2xl font-semibold mb-2">Create New Plan</h2>
+    <p className="text-sm text-white/50">
+      Define your goal duration and daily tasks.
+    </p>
+  </div>
 
-  <div className="flex gap-3 flex-wrap">
-    <input
-      value={title}
-      onChange={(e) => setTitle(e.target.value)}
-      placeholder="Plan Title"
-      className="bg-black/40 border border-white/10 rounded px-3 py-2 text-sm"
-    />
+  {/* Plan Info */}
+  <div className="grid md:grid-cols-2 gap-6">
 
+    {/* Title */}
+    <div>
+      <label className="block text-sm text-white/60 mb-2">
+        Plan Title
+      </label>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Example: 30 Days Fitness Challenge"
+        className="w-full bg-black/40 px-4 py-3 rounded-lg border border-white/10 
+                   focus:border-neutral-500 focus:outline-none transition"
+      />
+    </div>
 
+    {/* Duration */}
+    <div>
+      <label className="block text-sm text-white/60 mb-2">
+        Duration (Days)
+      </label>
+      <input
+        type="number"
+        min={1}
+        max={365}
+        value={days}
+        onChange={(e) => setDays(Number(e.target.value))}
+        className="w-full bg-black/40 px-4 py-3 rounded-lg border border-white/10 
+                   focus:border-neutral-500 focus:outline-none transition"
+      />
+    </div>
 
-    <input
-      type="number"
-      value={days}
-      onChange={(e) => setDays(Number(e.target.value))}
-      min={1}
-      max={365}
-      className="bg-black/40 border border-white/10 rounded px-3 py-2 text-sm w-24"
-    />
+  </div>
+
+  {/* Tasks */}
+  <div>
+    <label className="block text-sm text-white/60 mb-4">
+      Daily Tasks
+    </label>
+
+    <div className="space-y-3">
+      {tasks.map((task, i) => (
+        <input
+          key={i}
+          value={task}
+          onChange={(e) => updateTask(i, e.target.value)}
+          placeholder={`Task ${i + 1}`}
+          className="w-full bg-black/40 px-4 py-3 rounded-lg border border-white/10 
+                     focus:border-neutral-500 focus:outline-none transition"
+        />
+      ))}
+    </div>
+
+  <button
+  onClick={addTaskField}
+  className="mt-4 px-5 py-5 bg-neutral-700 hover:bg-neutral-900 
+             text-white rounded-lg text-sm font-medium 
+             transition-all duration-200"
+>
+  + Add Another Task
+</button>
+  </div>
+
+  {/* Action Button */}
+  <div className="flex justify-between items-center pt-4 border-t border-white/10">
+    <p className="text-xs text-white/40">
+      Maximum 5 active plans allowed.
+    </p>
 
     <button
       onClick={createPlan}
       disabled={creating}
-      className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm"
+      className="bg-emerald-500/50 hover:bg-emerald-700 px-6 py-3 rounded-lg 
+                 font-medium transition disabled:opacity-50"
     >
-      {creating ? "Creating..." : "Create"}
+      {creating ? "Creating..." : "Create Plan"}
     </button>
   </div>
 
-  <p className="text-xs text-white/40">
-    Maximum 5 active plans allowed.
-  </p>
 </div>
 
-        {plans.length === 0 && (
-          <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
-            <div className="text-4xl mb-3">🚀</div>
-            <p className="text-white/70 mb-2 font-medium">
-              No study plans yet
-            </p>
-            <p className="text-white/40 text-sm">
-              Create your first plan to start tracking progress.
-            </p>
-          </div>
-        )}
-
-    
-
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {plans.map((plan) => {
-            const startDate = new Date(plan.startDate);
-
-            let previewPercent = 0;
-            if (plan.startDate) {
-              const today = new Date();
-              const diff =
-                Math.floor(
-                  (today.getTime() - startDate.getTime()) / 86400000
-                ) + 1;
-
-              previewPercent = Math.min(
-                100,
-                Math.round((diff / plan.totalDays) * 100)
-              );
-            }
-
-            return (
-             <div
-  key={plan._id}
-onClick={() => router.push(`/plan/${plan._id}`)}
-  className="
-    group cursor-pointer
-    backdrop-blur-xl bg-white/5
-    border border-white/10
-    rounded-2xl p-5
-    hover:bg-white/10
-    hover:scale-[1.02]
-    transition-all duration-300
-    shadow-lg hover:shadow-2xl
-  "
->
-
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-lg font-semibold leading-tight">
-                    {plan.title}
-                  </h2>
-
-                  <div className="relative w-10 h-10">
-                    <svg viewBox="0 0 36 36" className="w-10 h-10">
-                      <path
-                        d="M18 2a16 16 0 1 1 0 32a16 16 0 1 1 0-32"
-                        fill="none"
-                        stroke="rgba(255,255,255,0.15)"
-                        strokeWidth="3"
-                      />
-                      <path
-                        d="M18 2a16 16 0 1 1 0 32a16 16 0 1 1 0-32"
-                        fill="none"
-                        stroke="rgb(16 185 129)"
-                        strokeWidth="3"
-                        strokeDasharray={`${previewPercent}, 100`}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="space-y-1 text-sm">
-                  <p className="text-white/70">
-                    ⏳ {plan.totalDays} days
-                  </p>
-                  <p className="text-white/40 text-xs">
-                    📅 {startDate.toDateString()}
-                  </p>
-                </div>
-
-                <div className="mt-4 opacity-0 group-hover:opacity-100 transition text-xs text-emerald-400">
-                  Open dashboard →
-                </div>
-
-                <button
-  onClick={(e) => {
-    e.stopPropagation();
-    deletePlan(plan._id);
-  }}
-  className="mt-3 text-xs text-red-400 hover:text-red-300"
->
-  Delete Plan
-</button>
+        {/* PLAN LIST */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {plans.map((plan) => (
+            <div
+              key={plan._id}
+              className="bg-white/5 p-5 rounded-xl border border-white/10 hover:bg-white/10 transition"
+            >
+              <div
+                onClick={() => router.push(`/plan/${plan._id}`)}
+                className="cursor-pointer"
+              >
+                <h3 className="font-semibold">{plan.title}</h3>
+                <p className="text-sm text-white/60">
+                  {plan.totalDays} days
+                </p>
               </div>
-            );
-          })}
+
+              <button
+                onClick={() => {
+                  setSelectedPlanId(plan._id);
+                  setIsConfirmOpen(true);
+                }}
+                className="mt-3 text-xs text-red-400"
+              >
+                Delete Plan
+              </button>
+            </div>
+          ))}
         </div>
+
+        {/* Confirm Dialog */}
+        <ConfirmDialog
+          isOpen={isConfirmOpen}
+          title="Delete Plan"
+          message="This plan will be permanently deleted. This action cannot be undone."
+          confirmText="Yes, Delete"
+          cancelText="Cancel"
+          onCancel={() => {
+            setIsConfirmOpen(false);
+            setSelectedPlanId(null);
+          }}
+          onConfirm={confirmDeletePlan}
+        />
 
       </div>
     </div>

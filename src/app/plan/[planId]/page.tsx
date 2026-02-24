@@ -21,7 +21,6 @@ export default function PlanWorkspace() {
   const [loading, setLoading] = useState(true);
   const [activeChart, setActiveChart] = useState('line');
 
-  /* ================= SAFE JSON ================= */
 
   async function safeJson(res: Response) {
     const text = await res.text();
@@ -33,7 +32,6 @@ export default function PlanWorkspace() {
     }
   }
 
-  /* ================= LOADERS ================= */
 
   async function loadPlan() {
     try {
@@ -84,27 +82,8 @@ export default function PlanWorkspace() {
     }
   }
 
-  /* ================= ADD TASK ================= */
 
-  async function addTask() {
-    if (!taskTitle.trim()) return;
 
-    try {
-      await fetch("/api/task", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ planId, title: taskTitle }),
-      });
-
-      setTaskTitle("");
-      loadTasks();
-    } catch (err) {
-      console.error("Add task failed:", err);
-    }
-  }
-
-  /* ================= OPTIMISTIC TOGGLE ================= */
 
   async function toggle(taskId: string, day: number) {
     const key = `${taskId}-${day}`;
@@ -135,7 +114,6 @@ export default function PlanWorkspace() {
     }
   }
 
-  /* ================= EFFECT ================= */
 
   useEffect(() => {
     if (!planId) return;
@@ -144,11 +122,8 @@ export default function PlanWorkspace() {
     );
   }, [planId]);
 
-  /* =======================================================
-     ✅ EVERYTHING BELOW IS SAFE (no early returns above)
-  ======================================================== */
 
-  /* ================= ACTIVE DAY ================= */
+
 
   let activeDay = 0;
 
@@ -163,7 +138,6 @@ export default function PlanWorkspace() {
       Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
   }
 
-  /* ================= METRICS ================= */
 
   const totalCells = (plan?.totalDays || 0) * tasks.length;
   const completedCount = Object.values(progressMap).filter(Boolean).length;
@@ -172,7 +146,6 @@ export default function PlanWorkspace() {
       ? 0
       : Math.round((completedCount / totalCells) * 100);
 
-  /* ================= STREAK ================= */
 
   const streak = useMemo(() => {
     if (!activeDay || !plan) return 0;
@@ -196,8 +169,6 @@ export default function PlanWorkspace() {
     return currentStreak;
   }, [progressMap, tasks, activeDay, plan]);
 
-  /* ================= TASK PROGRESS ================= */
-/* ================= TASK PROGRESS ================= */
 
 const taskProgress = useMemo(() => {
   if (!plan) return [];
@@ -215,7 +186,7 @@ const taskProgress = useMemo(() => {
         : Math.round((done / plan.totalDays) * 100);
 
     return {
-      _id: t._id,            // ✅ ADD THIS (critical)
+      _id: t._id,            
       name: t.title,
       value: percent,
       completed: done,
@@ -224,7 +195,6 @@ const taskProgress = useMemo(() => {
   });
 }, [tasks, progressMap, plan]);
 
-  /* ================= DAILY PROGRESS DATA ================= */
 
   const dailyProgressData = useMemo(() => {
     if (!plan) return [];
@@ -249,7 +219,6 @@ const taskProgress = useMemo(() => {
     return data;
   }, [progressMap, tasks, activeDay, plan]);
 
-  /* ================= HEAT COLOR ================= */
 
   function getHeatColor(checked: boolean, locked: boolean) {
     if (locked) return "bg-gray-700";
@@ -257,7 +226,6 @@ const taskProgress = useMemo(() => {
     return "bg-emerald-600 hover:bg-emerald-500";
   }
 
-  /* ================= CHART COLORS ================= */
 
   const CHART_COLORS = {
     primary: '#10b981',
@@ -272,7 +240,6 @@ const taskProgress = useMemo(() => {
 
   const PIE_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899'];
 
-  /* ================= EARLY RETURNS (NOW SAFE) ================= */
 
   if (loading) {
     return (
@@ -283,49 +250,32 @@ const taskProgress = useMemo(() => {
   }
 
   if (!plan) {
-    return <div className="min-h-screen bg-gray-900 p-6 text-gray-300">Plan not found</div>;
+    return <div className="min-h-screen bg-neutral-900 p-6 text-gray-300">Plan not found</div>;
   }
 
-  /* ================= UI ================= */
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6 text-gray-300">
-      <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700 space-y-6">
-        {/* HEADER */}
+    <div className="min-h-screen bg-white/5 p-6  border-white/10 text-gray-100">
+      <div className="bg-white/5 p-6 rounded-xl shadow-xl border border-white/10 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">{plan.title}</h1>
           <div className="flex gap-3">
-            <div className="text-sm bg-gray-700 text-emerald-400 px-3 py-1 rounded-full border border-gray-600">
+            <div className="text-sm bg-white/5 text-emerald-400 px-3 py-1 rounded-full border border-gray-600">
               Overall: {completionPercent}%
             </div>
-            <div className="text-sm bg-gray-700 text-amber-400 px-3 py-1 rounded-full border border-gray-600">
+            <div className="text-sm bg-white/5 text-amber-400 px-3 py-1 rounded-full border border-gray-600">
               Streak: {streak} 🔥
             </div>
           </div>
         </div>
 
-        {/* ADD TASK */}
-        <div className="flex gap-2">
-          <input
-            value={taskTitle}
-            onChange={(e) => setTaskTitle(e.target.value)}
-            className="bg-gray-700 border-gray-600 text-white p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            placeholder="New Task"
-          />
-          <button
-            onClick={addTask}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 rounded transition-colors"
-          >
-            Add
-          </button>
-        </div>
+   
 
-        {/* DAILY MATRIX */}
         <div className="overflow-x-auto rounded-lg border border-gray-700">
           <table className="min-w-max border-collapse w-full text-sm">
             <thead>
-              <tr className="bg-gray-700">
-                <th className="sticky left-0 bg-gray-700 border-gray-600 p-3 z-10 text-left text-gray-300 font-semibold">
+              <tr className="bg-white/3">
+                <th className="sticky left-0 bg-white/10 border-gray-600 p-3 z-10 text-left text-gray-300 font-semibold">
                   Day
                 </th>
                 {tasks.map((t) => (
@@ -345,9 +295,9 @@ const taskProgress = useMemo(() => {
                 return (
                   <tr 
                     key={day} 
-                    className={`${isActive ? 'bg-gray-700/50' : ''} hover:bg-gray-700/30 transition-colors`}
+                    className={`${isActive ? 'bg-white/4' : ''} hover:bg-gray-700/30 transition-colors`}
                   >
-                    <td className="sticky left-0 bg-gray-800 border-gray-700 p-3 font-medium text-gray-400">
+                    <td className="sticky left-0 bg-white/5 border-gray-700 p-3 font-medium text-gray-400">
                       Day {day}
                       {isActive && <span className="ml-2 text-emerald-400">●</span>}
                     </td>
@@ -379,13 +329,11 @@ const taskProgress = useMemo(() => {
           </table>
         </div>
 
-        {/* ================= PREMIUM ANALYTICS ================= */}
 
         <div className="mt-10 space-y-8">
           <div className="flex flex-wrap justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-white">Progress Analytics</h2>
             
-            {/* Chart Type Selector */}
             <div className="flex gap-2 bg-gray-700 p-1 rounded-lg">
               {['line', 'bar', 'area', 'composed'].map((type) => (
                 <button
@@ -403,7 +351,6 @@ const taskProgress = useMemo(() => {
             </div>
           </div>
 
-          {/* Main Chart */}
           <div className="bg-gray-700/30 p-6 rounded-xl border border-gray-700">
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
@@ -492,9 +439,7 @@ const taskProgress = useMemo(() => {
             </div>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Completion Rate Card */}
             <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-700">
               <h3 className="text-sm text-gray-400 mb-2">Completion Rate</h3>
               <div className="text-2xl font-bold text-white">{completionPercent}%</div>
@@ -509,7 +454,6 @@ const taskProgress = useMemo(() => {
               </div>
             </div>
 
-            {/* Streak Card */}
             <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-700">
               <h3 className="text-sm text-gray-400 mb-2">Current Streak</h3>
               <div className="text-2xl font-bold text-amber-400">{streak} days 🔥</div>
@@ -518,7 +462,6 @@ const taskProgress = useMemo(() => {
               </div>
             </div>
 
-            {/* Progress Card */}
             <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-700">
               <h3 className="text-sm text-gray-400 mb-2">Today's Progress</h3>
               {activeDay > 0 && activeDay <= plan.totalDays ? (
@@ -536,7 +479,6 @@ const taskProgress = useMemo(() => {
             </div>
           </div>
 
-          {/* Task Progress Bars */}
           <div className="bg-gray-700/30 p-6 rounded-xl border border-gray-700">
             <h3 className="text-lg font-semibold text-white mb-4">Task Breakdown</h3>
             <div className="space-y-4">
@@ -560,7 +502,6 @@ const taskProgress = useMemo(() => {
             </div>
           </div>
 
-          {/* Mini Calendar View */}
           <div className="bg-gray-700/30 p-6 rounded-xl border border-gray-700">
             <h3 className="text-lg font-semibold text-white mb-4">Weekly Overview</h3>
             <div className="grid grid-cols-7 gap-2">

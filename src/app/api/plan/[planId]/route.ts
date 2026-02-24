@@ -1,4 +1,3 @@
-// src/app/api/plan/[planId]/route.ts
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/config/db";
@@ -32,6 +31,9 @@ export async function GET(
 }
 
 
+
+
+
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ planId: string }> }
@@ -39,34 +41,49 @@ export async function DELETE(
   try {
     await connectDB();
 
+   
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id)
+
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
+    }
 
+   
     const { planId } = await context.params;
+
+    if (!planId) {
+      return NextResponse.json(
+        { success: false, error: "Invalid plan ID" },
+        { status: 400 }
+      );
+    }
+
 
     const plan = await Plan.findById(planId);
 
-    if (!plan || plan.userId.toString() !== session.user.id)
+    if (!plan || plan.userId.toString() !== session.user.id) {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 }
       );
+    }
 
-    // Delete related data
+
+
     await Promise.all([
       Task.deleteMany({ planId }),
       Progress.deleteMany({ planId }),
       Plan.findByIdAndDelete(planId),
     ]);
-    
+
     return NextResponse.json({
       success: true,
       message: "Plan deleted successfully",
     });
+
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },
