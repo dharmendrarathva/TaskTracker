@@ -1,6 +1,28 @@
-import Link from "next/link";
+"use client";
+
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function HeroSection() {
+  const { status } = useSession();
+  const router = useRouter();
+
+  const handleCreatePlan = () => {
+    if (status === "authenticated") {
+      router.push("/myplans");
+    } else {
+      router.push("/api/auth/signin");
+    }
+  };
+
+  const handleDemo = () => {
+    if (status === "authenticated") {
+      router.push("/myplans");
+    } else {
+      router.push("/review");
+    }
+  };
+
   return (
     <div>
       <h1 className="text-4xl md:text-6xl font-bold leading-tight">
@@ -16,19 +38,19 @@ export default function HeroSection() {
       </p>
 
       <div className="mt-8 flex gap-4">
-        <Link
-          href="/dashboard"
+        <button
+          onClick={handleCreatePlan}
           className="px-6 py-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition"
         >
           Create Your Plan
-        </Link>
+        </button>
 
-        <Link
-          href="/analysis"
+        <button
+          onClick={handleDemo}
           className="px-6 py-3 border border-white/20 rounded-xl hover:bg-white/10 transition"
         >
           View Demo
-        </Link>
+        </button>
       </div>
     </div>
   );
